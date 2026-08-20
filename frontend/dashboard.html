@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Copper Shop Quality Check</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div id="appShell" class="page-shell">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-badge" style="margin:0;width:42px;height:42px;font-size:16px;">CS</div>
+      <div>
+        <h2>Copper Shop Quality Check</h2>
+        <div class="sub" id="welcomeUser">Welcome</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="nav-btn" href="reports.html">Reports</a>
+      <button class="logout-btn" onclick="handleLogout()">Log Out</button>
+    </div>
+  </div>
+
+  <!-- STEP 1: Brand -->
+  <div class="panel" id="brandPanel">
+    <label style="margin-top:0;">Search Brand</label>
+    <input type="search" id="brandSearch" placeholder="Type to filter brands..." oninput="renderBrandSelect()">
+    <label>Brand</label>
+    <div class="row-flex">
+      <div class="grow"><select id="brandSelect" onchange="onBrandChange()"></select></div>
+      <button class="ghost-btn" onclick="toggleInlineForm('addBrandForm')">+ Add Brand</button>
+    </div>
+
+    <div class="inline-form" id="addBrandForm">
+      <label style="margin-top:0;">New Brand Name</label>
+      <input type="text" id="newBrandName" placeholder="e.g. Daikin">
+      <div class="row-flex">
+        <button class="accent-btn" onclick="addBrand()">Save Brand</button>
+        <button class="ghost-btn" onclick="toggleInlineForm('addBrandForm')">Cancel</button>
+      </div>
+    </div>
+
+    <span class="manage-toggle" onclick="toggleManage()">Manage Brands &amp; Models (Add / Edit / Delete)</span>
+    <div class="manage-box" id="manageBox"></div>
+  </div>
+
+  <!-- STEP 2: Model -->
+  <div class="panel hidden" id="modelPanel">
+    <button class="back-btn" onclick="backToBrandSelect()">&larr; Back to brand select</button>
+    <div id="modelPanelHeading" style="font-weight:600;margin-bottom:10px;"></div>
+
+    <label style="margin-top:0;">Search Model</label>
+    <input type="search" id="modelSearch" placeholder="Type to filter models..." oninput="renderModelSelect()">
+    <label>Model</label>
+    <div class="row-flex">
+      <div class="grow"><select id="modelSelect" onchange="onModelChange()"></select></div>
+      <button class="ghost-btn" onclick="toggleInlineForm('addModelForm')">+ Add Model</button>
+    </div>
+
+    <div class="inline-form" id="addModelForm">
+      <label style="margin-top:0;">New Model Name</label>
+      <input type="text" id="newModelName" placeholder="e.g. CU-XY12ABC">
+      <label style="margin-top:10px;">FG Code</label>
+      <input type="text" id="newModelFg" placeholder="e.g. SO0123X0000KD">
+      <div class="row-flex">
+        <button class="accent-btn" onclick="addModel()">Save Model</button>
+        <button class="ghost-btn" onclick="toggleInlineForm('addModelForm')">Cancel</button>
+      </div>
+    </div>
+
+    <div class="fg-box hidden" id="fgBox">
+      <span class="label">FG Code</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <span id="fgText"></span>
+        <button class="kebab-btn static" onclick="toggleFgKebab(event)">&#8942;</button>
+      </div>
+    </div>
+
+    <button class="primary-btn hidden" id="continueBtn" onclick="goToLinks()">Continue to Links</button>
+  </div>
+
+  <!-- STEP 3: Links list -->
+  <div class="panel hidden" id="linksPanel">
+    <button class="back-btn" onclick="backToModelSelect()">&larr; Back to model select</button>
+    <div class="links-header">
+      <h3 id="linksHeading">Links</h3>
+      <button class="accent-btn" onclick="createNewLink()">+ New Link</button>
+    </div>
+    <div class="link-list" id="linkList"></div>
+    <div class="empty-note hidden" id="noLinksNote">No links yet for this model. Click "+ New Link" to create one.</div>
+  </div>
+
+  <!-- STEP 4: Link detail -->
+  <div class="panel hidden" id="detailPanel">
+    <button class="back-btn" onclick="backToLinksList()">&larr; Back to links</button>
+
+    <div class="part-code-row" id="partCodeRow"></div>
+
+    <div class="link-box">
+      <span class="label">Shareable link (opens this exact part code)</span>
+      <span id="linkText"></span>
+    </div>
+    <div class="timer-box" id="timerBox">Checking started - timing this session...</div>
+
+    <div class="photo-row">
+      <div class="photo-col">
+        <div class="slot-label">Suction</div>
+        <div class="photo-slot" id="slotA"></div>
+      </div>
+      <div class="photo-col">
+        <div class="slot-label">Discharge</div>
+        <div class="photo-slot" id="slotB"></div>
+      </div>
+    </div>
+    <input type="file" accept="image/*" id="fileInputHidden" class="hidden">
+  </div>
+
+  <footer class="app-footer">Developed by Neeraj Yadav</footer>
+</div>
+
+<!-- ================= LIGHTBOX ================= -->
+<div class="lightbox-overlay hidden" id="lightboxOverlay" ondblclick="closeLightbox()">
+  <button class="lightbox-close" onclick="event.stopPropagation();closeLightbox()">&times;</button>
+  <span class="lightbox-hint">Double-click to go back to normal size</span>
+  <div id="lightboxContent" style="display:flex;gap:18px;align-items:center;justify-content:center;"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+requireAuth();
+
+let currentBrandId = null, currentBrandName = null;
+let currentModelId = null, currentModelName = null, currentFg = null;
+let currentLinkId = null;
+let currentSessionId = null;
+let editingPartCode = false;
+let brandsCache = [];
+let modelsCache = [];
+let linksCache = [];
+
+document.getElementById('welcomeUser').textContent = 'Welcome, ' + (getUser()?.name || '');
+
+async function handleLogout(){
+  await endCurrentSessionIfAny();
+  clearAuth();
+  window.location.href = 'login.html';
+}
+window.addEventListener('beforeunload', () => {
+  if (currentSessionId) navigator.sendBeacon(API_BASE + '/api/sessions/' + currentSessionId + '/end');
+});
+function toggleInlineForm(id){ document.getElementById(id).classList.toggle('show'); }
+
+/* ================= STEP 1: Brand ================= */
+async function backToBrandSelect(){
+  currentBrandId = null; currentBrandName = null;
+  currentModelId = null; currentModelName = null; currentFg = null;
+  currentLinkId = null;
+  document.getElementById('brandPanel').classList.remove('hidden');
+  document.getElementById('modelPanel').classList.add('hidden');
+  document.getElementById('linksPanel').classList.add('hidden');
+  document.getElementById('detailPanel').classList.add('hidden');
+  document.getElementById('brandSearch').value = '';
+  document.getElementById('brandSelect').value = '';
+  await loadBrands();
+}
+async function loadBrands(){ brandsCache = await api('/api/brands'); renderBrandSelect(); }
+function renderBrandSelect(){
+  const filter = (document.getElementById('brandSearch').value || '').toLowerCase();
+  const sel = document.getElementById('brandSelect');
+  const brands = brandsCache.filter(b => b.name.toLowerCase().includes(filter)).sort((a,b)=>a.name.localeCompare(b.name));
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">-- Select Brand --</option>' +
+    brands.map(b => `<option value="${b.id}">${escapeHtml(b.name)} (${b.modelCount} models)</option>`).join('');
+  if (brands.some(b=>b.id===prev)) sel.value = prev;
+}
+async function addBrand(){
+  const name = document.getElementById('newBrandName').value.trim();
+  if(!name) return;
+  try {
+    const brand = await api('/api/brands', { method:'POST', body: JSON.stringify({ name }) });
+    document.getElementById('newBrandName').value = '';
+    document.getElementById('addBrandForm').classList.remove('show');
+    await loadBrands();
+    document.getElementById('brandSelect').value = brand.id;
+    await onBrandChange();
+    document.getElementById('addModelForm').classList.add('show');
+  } catch (err) { alert(err.message); }
+}
+async function onBrandChange(){
+  const brandId = document.getElementById('brandSelect').value;
+  if(!brandId) return;
+  const brand = brandsCache.find(b=>b.id===brandId);
+  currentBrandId = brandId; currentBrandName = brand ? brand.name : '';
+  document.getElementById('brandPanel').classList.add('hidden');
+  document.getElementById('modelPanel').classList.remove('hidden');
+  document.getElementById('modelPanelHeading').textContent = 'Brand: ' + currentBrandName;
+  document.getElementById('modelSearch').value = '';
+  document.getElementById('addModelForm').classList.remove('show');
+  document.getElementById('fgBox').classList.add('hidden');
+  document.getElementById('continueBtn').classList.add('hidden');
+  await loadModels();
+}
+
+/* ---------- manage brands & models ---------- */
+async function toggleManage(){
+  const box = document.getElementById('manageBox');
+  box.classList.toggle('show');
+  if (box.classList.contains('show')) await renderManage();
+}
+async function renderManage(){
+  await loadBrands();
+  const box = document.getElementById('manageBox');
+  const rows = await Promise.all(brandsCache.map(async b => ({ brand:b, models: await api('/api/brands/' + b.id + '/models') })));
+  box.innerHTML = rows.sort((a,b)=>a.brand.name.localeCompare(b.brand.name)).map(({brand, models})=>{
+    const bid = 'b_' + brand.id;
+    return `<div class="brand-block">
+      <div class="brand-block-head" onclick="toggleBrandModels('${bid}')">
+        <div><span class="name">${escapeHtml(brand.name)}</span><span class="count">${models.length} models</span></div>
+        <div class="brand-actions" onclick="event.stopPropagation()">
+          <button class="icon-btn" onclick="renameBrand('${brand.id}','${escapeHtml(brand.name).replace(/'/g,"\\'")}')">Edit</button>
+          <button class="icon-btn danger" onclick="deleteBrand('${brand.id}')">Del</button>
+        </div>
+      </div>
+      <div class="brand-models" id="${bid}">
+        ${models.map(m => `
+          <div class="model-row">
+            <div><div class="mname">${escapeHtml(m.modelName)}</div><div class="mfg">FG: ${escapeHtml(m.fgCode)}</div></div>
+            <div class="brand-actions">
+              <button class="icon-btn" onclick="editModel('${m.id}','${escapeHtml(m.modelName).replace(/'/g,"\\'")}','${escapeHtml(m.fgCode).replace(/'/g,"\\'")}')">Edit</button>
+              <button class="icon-btn danger" onclick="deleteModel('${m.id}')">Del</button>
+            </div>
+          </div>`).join('')}
+        ${models.length===0 ? '<div class="empty-note" style="padding:10px 0;">No models yet.</div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function toggleBrandModels(bid){ document.getElementById(bid).classList.toggle('show'); }
+async function renameBrand(id, oldName){
+  const newName = prompt('Rename brand:', oldName);
+  if(!newName || newName.trim()==='' || newName===oldName) return;
+  try { await api('/api/brands/' + id, { method:'PUT', body: JSON.stringify({ name:newName }) }); await renderManage(); await loadBrands(); }
+  catch(err){ alert(err.message); }
+}
+async function deleteBrand(id){
+  if(!confirm('Delete this brand and all its models?')) return;
+  await api('/api/brands/' + id, { method:'DELETE' });
+  await renderManage(); await loadBrands();
+}
+async function editModel(id, oldName, oldFg){
+  const newModel = prompt('Model name:', oldName);
+  if(newModel === null) return;
+  const newFg = prompt('FG Code:', oldFg);
+  if(newFg === null) return;
+  try {
+    await api('/api/models/' + id, { method:'PUT', body: JSON.stringify({ modelName:newModel, fgCode:newFg }) });
+    await renderManage();
+    if (currentBrandId) await loadModels();
+  } catch(err){ alert(err.message); }
+}
+async function deleteModel(id){
+  if(!confirm('Delete this model?')) return;
+  await api('/api/models/' + id, { method:'DELETE' });
+  await renderManage();
+  if (currentBrandId) await loadModels();
+}
+
+/* ================= STEP 2: Model ================= */
+async function backToModelSelect(){
+  currentModelId = null; currentModelName = null; currentFg = null; currentLinkId = null;
+  document.getElementById('modelPanel').classList.remove('hidden');
+  document.getElementById('linksPanel').classList.add('hidden');
+  document.getElementById('detailPanel').classList.add('hidden');
+  document.getElementById('modelSelect').value = '';
+  document.getElementById('fgBox').classList.add('hidden');
+  document.getElementById('continueBtn').classList.add('hidden');
+  await loadModels();
+}
+async function loadModels(){ modelsCache = await api('/api/brands/' + currentBrandId + '/models'); renderModelSelect(); }
+function renderModelSelect(){
+  const filter = (document.getElementById('modelSearch').value || '').toLowerCase();
+  const sel = document.getElementById('modelSelect');
+  const models = modelsCache.filter(m => m.modelName.toLowerCase().includes(filter));
+  sel.innerHTML = '<option value="">-- Select Model --</option>' +
+    models.map(m => `<option value="${m.id}">${escapeHtml(m.modelName)}</option>`).join('');
+}
+async function addModel(){
+  const name = document.getElementById('newModelName').value.trim();
+  const fg = document.getElementById('newModelFg').value.trim();
+  if(!name || !fg) return;
+  try {
+    const model = await api('/api/brands/' + currentBrandId + '/models', { method:'POST', body: JSON.stringify({ modelName:name, fgCode:fg }) });
+    document.getElementById('newModelName').value = '';
+    document.getElementById('newModelFg').value = '';
+    document.getElementById('addModelForm').classList.remove('show');
+    await loadModels();
+    document.getElementById('modelSelect').value = model.id;
+    await onModelChange();
+  } catch(err){ alert(err.message); }
+}
+async function onModelChange(){
+  const modelId = document.getElementById('modelSelect').value;
+  if(!modelId){
+    document.getElementById('fgBox').classList.add('hidden');
+    document.getElementById('continueBtn').classList.add('hidden');
+    return;
+  }
+  const model = modelsCache.find(m=>m.id===modelId);
+  currentModelId = modelId; currentModelName = model ? model.modelName : ''; currentFg = model ? model.fgCode : '';
+  document.getElementById('fgText').textContent = currentFg;
+  document.getElementById('fgBox').classList.remove('hidden');
+  document.getElementById('continueBtn').classList.remove('hidden');
+}
+function toggleFgKebab(ev){
+  ev.stopPropagation(); closeAnyKebabMenu();
+  const box = document.getElementById('fgBox');
+  const menu = document.createElement('div');
+  menu.className = 'kebab-menu'; menu.style.top = '38px'; menu.style.right = '10px';
+  menu.innerHTML = '<button onclick="editCurrentModelFg()">Edit FG Code</button><button class="danger" onclick="deleteCurrentModel()">Delete Model</button>';
+  box.appendChild(menu);
+  document.addEventListener('click', closeAnyKebabMenu, { once:true });
+}
+async function editCurrentModelFg(){
+  closeAnyKebabMenu();
+  const newFg = prompt('FG Code:', currentFg);
+  if(newFg === null) return;
+  try {
+    await api('/api/models/' + currentModelId, { method:'PUT', body: JSON.stringify({ fgCode:newFg }) });
+    currentFg = newFg.trim();
+    document.getElementById('fgText').textContent = currentFg;
+    await loadModels();
+  } catch(err){ alert(err.message); }
+}
+async function deleteCurrentModel(){
+  closeAnyKebabMenu();
+  if(!confirm('Delete model "' + currentModelName + '"?')) return;
+  await api('/api/models/' + currentModelId, { method:'DELETE' });
+  currentModelId = null; currentFg = null;
+  document.getElementById('fgBox').classList.add('hidden');
+  document.getElementById('continueBtn').classList.add('hidden');
+  document.getElementById('modelSelect').value = '';
+  await loadModels();
+}
+
+/* ================= STEP 3: Links list ================= */
+async function goToLinks(){
+  if(!currentModelId) return;
+  document.getElementById('modelPanel').classList.add('hidden');
+  document.getElementById('linksPanel').classList.remove('hidden');
+  document.getElementById('linksHeading').textContent = currentBrandName + ' \u203A ' + currentModelName;
+  await loadLinks();
+}
+async function loadLinks(){ linksCache = await api('/api/links/model/' + currentModelId); renderLinkList(); }
+function renderLinkList(){
+  const list = document.getElementById('linkList');
+  const noNote = document.getElementById('noLinksNote');
+  list.innerHTML = '';
+  if(linksCache.length === 0){ noNote.classList.remove('hidden'); return; }
+  noNote.classList.add('hidden');
+  linksCache.forEach(l=>{
+    const row = document.createElement('div');
+    row.className = 'link-item';
+    row.onclick = ()=> openLinkDetail(l.id);
+    row.innerHTML = `<div>
+        <div class="part-code">${escapeHtml(l.partCode)}</div>
+        <div class="link-url">${escapeHtml(buildShareUrl(l.id))}</div>
+      </div>
+      <div class="meta">${l.suctionPhotoUrl || l.dischargePhotoUrl ? 'has photos' : 'no photos yet'}</div>`;
+    list.appendChild(row);
+  });
+}
+async function createNewLink(){
+  try {
+    const link = await api('/api/links/model/' + currentModelId, { method:'POST' });
+    await loadLinks();
+    await openLinkDetail(link.id);
+  } catch(err){ alert(err.message); }
+}
+
+/* ================= STEP 4: Link detail (+ time tracking) ================= */
+async function backToLinksList(){
+  await endCurrentSessionIfAny();
+  document.getElementById('detailPanel').classList.add('hidden');
+  document.getElementById('linksPanel').classList.remove('hidden');
+  await loadLinks();
+}
+async function endCurrentSessionIfAny(){
+  if(!currentSessionId) return;
+  try { await api('/api/sessions/' + currentSessionId + '/end', { method:'POST' }); } catch(e){}
+  currentSessionId = null;
+}
+async function openLinkDetail(id){
+  await endCurrentSessionIfAny();
+  let rec;
+  try { rec = await api('/api/links/' + id); }
+  catch (err) {
+    alert('Could not open this link - please reselect the brand and model, then try again.');
+    await backToLinksList(); return;
+  }
+  currentLinkId = id; editingPartCode = false;
+  document.getElementById('brandPanel').classList.add('hidden');
+  document.getElementById('modelPanel').classList.add('hidden');
+  document.getElementById('linksPanel').classList.add('hidden');
+  document.getElementById('detailPanel').classList.remove('hidden');
+  document.getElementById('linkText').textContent = buildShareUrl(id);
+  renderPartCodeRow(rec);
+  renderSlot('A', rec);
+  renderSlot('B', rec);
+
+  try {
+    const s = await api('/api/sessions/start', { method:'POST', body: JSON.stringify({ partCodeLinkId: id }) });
+    currentSessionId = s.sessionId;
+    document.getElementById('timerBox').textContent = 'Checking started at ' + new Date(s.startTime).toLocaleTimeString('en-IN');
+  } catch (err) {
+    document.getElementById('timerBox').textContent = 'Could not start timer: ' + err.message;
+  }
+}
+function renderPartCodeRow(rec){
+  const row = document.getElementById('partCodeRow');
+  closeAnyKebabMenu();
+  if(editingPartCode){
+    row.innerHTML = `<input type="text" class="part-code-edit-input" id="partCodeEditInput" value="${escapeHtml(rec.partCode)}">
+       <button class="ghost-btn" onclick="savePartCode()">Save</button>
+       <button class="ghost-btn" onclick="cancelEditPartCode()">Cancel</button>`;
+    setTimeout(()=>{ const i=document.getElementById('partCodeEditInput'); if(i){ i.focus(); i.select(); } },0);
+  } else {
+    row.innerHTML = `<span class="part-code-display">${escapeHtml(rec.partCode)}</span>
+       <button class="kebab-btn static" onclick="togglePartCodeKebab(event)">&#8942;</button>
+       <span class="save-hint" id="saveHint">Saved</span>`;
+  }
+}
+function togglePartCodeKebab(ev){
+  ev.stopPropagation(); closeAnyKebabMenu();
+  const row = document.getElementById('partCodeRow');
+  const menu = document.createElement('div');
+  menu.className = 'kebab-menu'; menu.style.top = '36px'; menu.style.right = 'auto'; menu.style.left = '0';
+  menu.innerHTML = '<button onclick="startEditPartCode()">Edit</button><button class="danger" onclick="deleteCurrentLink()">Delete</button>';
+  row.appendChild(menu);
+  document.addEventListener('click', closeAnyKebabMenu, { once:true });
+}
+async function startEditPartCode(){
+  closeAnyKebabMenu(); editingPartCode = true;
+  const rec = await api('/api/links/' + currentLinkId);
+  renderPartCodeRow(rec);
+}
+async function cancelEditPartCode(){
+  editingPartCode = false;
+  const rec = await api('/api/links/' + currentLinkId);
+  renderPartCodeRow(rec);
+}
+async function savePartCode(){
+  const val = document.getElementById('partCodeEditInput').value.trim();
+  if(!val) return;
+  try {
+    const rec = await api('/api/links/' + currentLinkId, { method:'PUT', body: JSON.stringify({ partCode: val }) });
+    editingPartCode = false;
+    renderPartCodeRow(rec);
+    const hint = document.getElementById('saveHint');
+    if(hint){ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 1200); }
+  } catch(err){ alert(err.message); }
+}
+async function deleteCurrentLink(){
+  closeAnyKebabMenu();
+  if(!confirm('Delete this link and its photos?')) return;
+  await endCurrentSessionIfAny();
+  await api('/api/links/' + currentLinkId, { method:'DELETE' });
+  await backToLinksList();
+}
+
+/* photo slots */
+function renderSlot(slot, rec){
+  const el = document.getElementById('slot' + slot);
+  const photoPath = slot === 'A' ? rec.suctionPhotoUrl : rec.dischargePhotoUrl;
+  const photoUrl = photoPath ? (API_BASE + photoPath) : null;
+  const labelText = slot === 'A' ? 'Suction' : 'Discharge';
+  closeAnyKebabMenu();
+  if(photoUrl){
+    el.classList.add('has-photo');
+    el.innerHTML = `<img src="${photoUrl}" alt="${labelText} photo" ondblclick="event.stopPropagation();openLightboxSingle('${slot}')">
+       <button class="kebab-btn" onclick="toggleKebab(event,'${slot}')">&#8942;</button>`;
+  } else {
+    el.classList.remove('has-photo');
+    el.innerHTML = `<div class="slot-placeholder">
+         <span class="icon">&#128247;</span>
+         No photo yet
+         <br><button class="choose-btn" onclick="pickPhoto('${slot}')">Add Photo</button>
+       </div>`;
+  }
+}
+function toggleKebab(ev, slot){
+  ev.stopPropagation(); closeAnyKebabMenu();
+  const el = document.getElementById('slot' + slot);
+  const menu = document.createElement('div');
+  menu.className = 'kebab-menu';
+  menu.innerHTML = `<button onclick="pickPhoto('${slot}')">Add / Change Photo</button><button class="danger" onclick="deletePhoto('${slot}')">Delete Photo</button>`;
+  el.appendChild(menu);
+  document.addEventListener('click', closeAnyKebabMenu, { once:true });
+}
+function closeAnyKebabMenu(){ document.querySelectorAll('.kebab-menu').forEach(m=>m.remove()); }
+function pickPhoto(slot){
+  closeAnyKebabMenu();
+  const input = document.getElementById('fileInputHidden');
+  input.onchange = async function(){
+    const file = input.files[0];
+    if(!file) return;
+    const form = new FormData();
+    form.append('photo', file);
+    form.append('slot', slot === 'A' ? 'suction' : 'discharge');
+    try {
+      const rec = await api('/api/links/' + currentLinkId + '/photo', { method:'POST', body: form });
+      renderSlot(slot, rec);
+    } catch(err){ alert(err.message); }
+    input.value = '';
+  };
+  input.click();
+}
+async function deletePhoto(slot){
+  closeAnyKebabMenu();
+  try {
+    const rec = await api('/api/links/' + currentLinkId + '/photo/' + (slot==='A'?'suction':'discharge'), { method:'DELETE' });
+    renderSlot(slot, rec);
+  } catch(err){ alert(err.message); }
+}
+
+/* lightbox */
+function openLightboxSingle(slot){
+  const img = document.getElementById('slot' + slot).querySelector('img');
+  if(!img) return;
+  document.getElementById('lightboxOverlay').classList.remove('hidden');
+  document.getElementById('lightboxContent').innerHTML = `<img src="${img.src}" alt="${slot}">`;
+}
+function openLightboxBoth(){
+  const imgA = document.getElementById('slotA').querySelector('img');
+  const imgB = document.getElementById('slotB').querySelector('img');
+  if(!imgA && !imgB) return;
+  document.getElementById('lightboxOverlay').classList.remove('hidden');
+  let html = '';
+  if(imgA) html += `<img src="${imgA.src}" alt="Suction">`;
+  if(imgB) html += `<img src="${imgB.src}" alt="Discharge">`;
+  document.getElementById('lightboxContent').innerHTML = html;
+}
+function closeLightbox(){ document.getElementById('lightboxOverlay').classList.add('hidden'); }
+document.body.addEventListener('dblclick', (e)=>{
+  const row = e.target.closest('.photo-row');
+  if(row && !e.target.closest('img')) openLightboxBoth();
+});
+
+/* ---- deep link: dashboard.html?link=<id> opens straight to that part code ---- */
+(async function handleDeepLink(){
+  const params = new URLSearchParams(window.location.search);
+  const linkId = params.get('link');
+  if(!linkId) { await backToBrandSelect(); return; }
+  try {
+    const rec = await api('/api/links/' + linkId); // includes brand + model info
+    currentBrandId = rec.brand.id; currentBrandName = rec.brand.name;
+    currentModelId = rec.model.id; currentModelName = rec.model.modelName; currentFg = rec.model.fgCode;
+    await loadBrands(); // so "back" chains work correctly afterwards
+    await loadModels();
+    await loadLinks();
+    await openLinkDetail(linkId);
+  } catch (err) {
+    alert('This link could not be opened: ' + err.message);
+    await backToBrandSelect();
+  }
+})();
+</script>
+</body>
+</html>

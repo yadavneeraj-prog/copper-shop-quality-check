@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create Account - Copper Shop Quality Check</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="card">
+  <a class="back-link" href="login.html">&larr; Back to sign in</a>
+  <div class="logo-badge">CS</div>
+  <h1 class="title">Create Account</h1>
+  <p class="subtitle">Set up your access</p>
+
+  <label>Full Name</label>
+  <input type="text" id="signupName" placeholder="Your name">
+
+  <label>Email</label>
+  <input type="email" id="signupEmail" placeholder="you@amber.com">
+
+  <label>Password</label>
+  <div class="input-wrap">
+    <input type="password" id="signupPassword" placeholder="Create password">
+    <button class="eye-btn" onclick="toggleEye('signupPassword', this)">show</button>
+  </div>
+
+  <div class="error-msg" id="signupError"></div>
+  <div class="ok-msg" id="signupOk"></div>
+  <button class="primary-btn" id="signupBtn" onclick="handleSignup()">Create Account</button>
+
+  <footer class="card-footer">Developed by Neeraj Yadav</footer>
+</div>
+
+<script src="config.js"></script>
+<script>
+async function handleSignup(){
+  hideMsg('signupError'); hideMsg('signupOk');
+  const name = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  if(!name || !email || !password){ showMsg('signupError','All fields are required.'); return; }
+
+  const btn = document.getElementById('signupBtn'); btn.disabled = true;
+  try {
+    await api('/api/auth/signup', { method:'POST', body: JSON.stringify({ name, email, password }) });
+    showMsg('signupOk','Account created. Redirecting to sign in...');
+    setTimeout(()=> window.location.href = 'login.html', 1200);
+  } catch (err) {
+    showMsg('signupError', err.message);
+  } finally { btn.disabled = false; }
+}
+</script>
+</body>
+</html>

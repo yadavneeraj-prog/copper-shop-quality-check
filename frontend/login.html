@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In - Copper Shop Quality Check</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+
+<div class="card">
+  <div class="logo-badge">CS</div>
+  <h1 class="title">Copper Shop Quality Check</h1>
+  <p class="subtitle">Sign in to continue</p>
+
+  <label>Email</label>
+  <input type="email" id="loginEmail" placeholder="you@amber.com">
+
+  <label>Password</label>
+  <div class="input-wrap">
+    <input type="password" id="loginPassword" placeholder="Enter password">
+    <button class="eye-btn" onclick="toggleEye('loginPassword', this)">show</button>
+  </div>
+
+  <div class="error-msg" id="loginError"></div>
+  <button class="primary-btn" id="loginBtn" onclick="handleLogin()">Sign In</button>
+
+  <div class="link-row">
+    <a href="forgot-password.html">Forgot password?</a>
+    <a href="signup.html">Create account</a>
+  </div>
+
+  <footer class="card-footer">Developed by Neeraj Yadav</footer>
+</div>
+
+<script src="config.js"></script>
+<script>
+async function handleLogin(){
+  hideMsg('loginError');
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if(!email || !password){ showMsg('loginError','Please enter email and password.'); return; }
+
+  const btn = document.getElementById('loginBtn'); btn.disabled = true;
+  try {
+    const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ email, password }) });
+    saveAuth(data.token, data.user);
+    window.location.href = 'dashboard.html';
+  } catch (err) {
+    showMsg('loginError', err.message);
+  } finally { btn.disabled = false; }
+}
+
+document.getElementById('loginPassword').addEventListener('keyup', e => { if(e.key === 'Enter') handleLogin(); });
+</script>
+</body>
+</html>
