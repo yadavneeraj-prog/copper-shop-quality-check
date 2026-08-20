@@ -1,7 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
 const PartCodeLink = require('../models/PartCodeLink');
 const Model = require('../models/Model');
 const { requireAuth } = require('../middleware/auth');
@@ -9,26 +8,30 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 
-// ---- photo upload setup (stored on disk under /uploads) ----
-const uploadDir = path.join(__dirname, '..', '..', 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${req.params.id}-${req.body.slot}-${Date.now()}${ext}`);
-  }
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
-const upload = multer({ storage, limits: { fileSize: 8 * 1024 * 1024 } }); // 8MB max
 
-// list links for a model
+// keep uploaded file in memory, then push it to Cloudinary (not local disk)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+
+function uploadBufferToCloudinary(buffer, publicId) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: 'copper-shop-qc', public_id: publicId, overwrite: true },
+      (err, result) => err ? reject(err) : resolve(result)
+    );
+    stream.end(buffer);
+  });
+}
+
 router.get('/model/:modelId', async (req, res) => {
   const links = await PartCodeLink.find({ model: req.params.modelId }).sort({ createdAt: 1 });
   res.json(links.map(formatLink));
 });
 
-// create a new link (auto part code + auto "link" identity is just its _id / URL)
 router.post('/model/:modelId', async (req, res) => {
   const model = await Model.findById(req.params.modelId);
   if (!model) return res.status(404).json({ message: 'Model not found.' });
@@ -44,7 +47,6 @@ router.post('/model/:modelId', async (req, res) => {
   res.status(201).json(formatLink(link));
 });
 
-// fetch a single link (this is what opens when the shareable link is clicked)
 router.get('/:id', async (req, res) => {
   const link = await PartCodeLink.findById(req.params.id).populate({
     path: 'model',
@@ -61,7 +63,6 @@ router.get('/:id', async (req, res) => {
   });
 });
 
-// rename part code
 router.put('/:id', async (req, res) => {
   const { partCode } = req.body;
   const link = await PartCodeLink.findByIdAndUpdate(req.params.id, { partCode: partCode.trim() }, { new: true });
@@ -69,12 +70,9 @@ router.put('/:id', async (req, res) => {
   res.json(formatLink(link));
 });
 
-// delete a link (and its photo files)
 router.delete('/:id', async (req, res) => {
   const link = await PartCodeLink.findById(req.params.id);
   if (!link) return res.status(404).json({ message: 'Link not found.' });
-  removeFileIfExists(link.suctionPhotoUrl);
-  removeFileIfExists(link.dischargePhotoUrl);
   await link.deleteOne();
   res.json({ message: 'Link deleted.' });
 });
@@ -88,14 +86,19 @@ router.post('/:id/photo', upload.single('photo'), async (req, res) => {
   const link = await PartCodeLink.findById(req.params.id);
   if (!link) return res.status(404).json({ message: 'Link not found.' });
 
-  const oldUrl = slot === 'suction' ? link.suctionPhotoUrl : link.dischargePhotoUrl;
-  removeFileIfExists(oldUrl);
+  try {
+    const publicId = `${req.params.id}-${slot}`;
+    const result = await uploadBufferToCloudinary(req.file.buffer, publicId);
 
-  const publicUrl = `/uploads/${req.file.filename}`;
-  if (slot === 'suction') link.suctionPhotoUrl = publicUrl; else link.dischargePhotoUrl = publicUrl;
-  await link.save();
+    if (slot === 'suction') link.suctionPhotoUrl = result.secure_url;
+    else link.dischargePhotoUrl = result.secure_url;
+    await link.save();
 
-  res.json(formatLink(link));
+    res.json(formatLink(link));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Photo upload failed.' });
+  }
 });
 
 // delete a photo
@@ -107,19 +110,19 @@ router.delete('/:id/photo/:slot', async (req, res) => {
   const link = await PartCodeLink.findById(req.params.id);
   if (!link) return res.status(404).json({ message: 'Link not found.' });
 
-  const url = slot === 'suction' ? link.suctionPhotoUrl : link.dischargePhotoUrl;
-  removeFileIfExists(url);
-  if (slot === 'suction') link.suctionPhotoUrl = null; else link.dischargePhotoUrl = null;
+  try {
+    const publicId = `copper-shop-qc/${req.params.id}-${slot}`;
+    await cloudinary.uploader.destroy(publicId);
+  } catch (err) {
+    console.error('Cloudinary delete warning:', err.message);
+  }
+
+  if (slot === 'suction') link.suctionPhotoUrl = null;
+  else link.dischargePhotoUrl = null;
   await link.save();
 
   res.json(formatLink(link));
 });
-
-function removeFileIfExists(publicUrl) {
-  if (!publicUrl) return;
-  const filePath = path.join(uploadDir, path.basename(publicUrl));
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-}
 
 function formatLink(link) {
   return {
