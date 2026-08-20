@@ -2,7 +2,7 @@
    Shared config, auth storage, and API helper - loaded by every page.
    Point API_BASE at wherever you host the backend from /backend.
    ============================================================ */
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://copper-shop-backend.onrender.com';
 
 /* ---- auth token/user, persisted across pages via localStorage ----
    (This is a real, self-hosted app - not an in-chat preview - so
