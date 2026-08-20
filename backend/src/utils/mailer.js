@@ -1,23 +1,38 @@
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 465),
-  secure: Number(process.env.SMTP_PORT || 465) === 465, // true for port 465
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
+// Sends email via Brevo's HTTPS API (works reliably even on hosts
+// that block outbound SMTP ports, unlike Nodemailer + SMTP).
 
 async function sendMail({ to, subject, html, attachments }) {
-  return transporter.sendMail({
-    from: process.env.SMTP_FROM,
-    to,
+  const toList = String(to).split(',').map(e => ({ email: e.trim() }));
+
+  const payload = {
+    sender: { name: 'Copper Shop Quality Check', email: process.env.SMTP_USER },
+    to: toList,
     subject,
-    html,
-    attachments // [{ filename, content }] - used for the Excel report
+    htmlContent: html
+  };
+
+  if (attachments && attachments.length) {
+    payload.attachment = attachments.map(a => ({
+      content: Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content,
+      name: a.filename
+    }));
+  }
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
   });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('Email send failed: ' + errText);
+  }
+  return res.json();
 }
 
 function otpEmailHtml(name, otp) {
