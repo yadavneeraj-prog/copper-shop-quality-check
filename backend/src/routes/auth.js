@@ -48,7 +48,7 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email: (email || '').toLowerCase() });
-    if (!user) return res.status(401).json({ message: 'Invalid email or password.' });
+if (!user) return res.status(404).json({ message: 'No account found with this email. Please create an account first.' });
 
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       return res.status(423).json({ message: 'Account locked due to too many failed attempts. Try again later or reset your password.' });
