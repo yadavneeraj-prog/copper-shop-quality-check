@@ -14,8 +14,7 @@ async function buildSessionReportExcel(sessions) {
     { header: 'Brand', key: 'brand', width: 18 },
     { header: 'Model', key: 'model', width: 20 },
     { header: 'FG Code', key: 'fgCode', width: 20 },
-    { header: 'Suction Part Code', key: 'suctionPartCode', width: 20 },
-    { header: 'Discharge Part Code', key: 'dischargePartCode', width: 20 },
+    { header: 'Part Code', key: 'partCode', width: 20 },
     { header: 'Date', key: 'date', width: 14 },
     { header: 'Start Time', key: 'startTime', width: 14 },
     { header: 'End Time', key: 'endTime', width: 14 },
@@ -27,6 +26,10 @@ async function buildSessionReportExcel(sessions) {
     const durationSec = s.durationSeconds || 0;
     const mm = String(Math.floor(durationSec / 60)).padStart(2, '0');
     const ss = String(Math.floor(durationSec % 60)).padStart(2, '0');
+    const suction = s.partCodeLink?.suctionPartCode || '';
+    const discharge = s.partCodeLink?.dischargePartCode || '';
+    const partCode = [suction, discharge].filter(Boolean).join(' / ');
+
     sheet.addRow({
       sno: i + 1,
       userName: s.user?.name || '',
@@ -34,8 +37,7 @@ async function buildSessionReportExcel(sessions) {
       brand: s.partCodeLink?.model?.brand?.name || '',
       model: s.partCodeLink?.model?.modelName || '',
       fgCode: s.partCodeLink?.model?.fgCode || '',
-      suctionPartCode: s.partCodeLink?.suctionPartCode || '',
-      dischargePartCode: s.partCodeLink?.dischargePartCode || '',
+      partCode,
       date: new Date(s.startTime).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
       startTime: new Date(s.startTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
       endTime: s.endTime ? new Date(s.endTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) : '(still open)',
