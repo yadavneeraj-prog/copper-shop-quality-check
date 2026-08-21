@@ -473,7 +473,7 @@ async function deleteCurrentLink(){
 function renderSlot(slot, rec){
   const el = document.getElementById('slot' + slot);
   const photoPath = slot === 'A' ? rec.suctionPhotoUrl : rec.dischargePhotoUrl;
-  const photoUrl = photoPath ? (API_BASE + photoPath) : null;
+  const photoUrl = photoPath ? (photoPath.startsWith('http') ? photoPath : API_BASE + photoPath) : null;
   const labelText = slot === 'A' ? 'Suction' : 'Discharge';
   closeAnyKebabMenu();
   if(photoUrl){
