@@ -56,7 +56,8 @@ function escapeHtml(s) {
 }
 function buildShareUrl(linkId) {
   // opening this URL takes you straight to that part code's photo page
-  return window.location.origin + window.location.pathname.replace(/dashboard\.html$/, '') + 'dashboard.html?link=' + linkId;
+  const folder = window.location.pathname.replace(/[^/]*$/, '');
+  return window.location.origin + folder + 'dashboard.html?link=' + linkId;
 }
 function toggleEye(inputId, btn) {
   const inp = document.getElementById(inputId);
