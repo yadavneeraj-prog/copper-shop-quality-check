@@ -96,20 +96,20 @@
   <div class="panel hidden" id="detailPanel">
     <button class="back-btn" onclick="backToLinksList()">&larr; Back to links</button>
 
-    <div class="part-code-row" id="partCodeRow"></div>
-
     <div class="link-box">
-      <span class="label">Shareable link (opens this exact part code)</span>
+      <span class="label">Shareable link (opens this exact part)</span>
       <span id="linkText"></span>
     </div>
     <div class="timer-box" id="timerBox">Checking started - timing this session...</div>
 
     <div class="photo-row">
       <div class="photo-col">
+        <div class="part-code-inline" id="partCodeRowA"></div>
         <div class="slot-label">Suction</div>
         <div class="photo-slot" id="slotA"></div>
       </div>
       <div class="photo-col">
+        <div class="part-code-inline" id="partCodeRowB"></div>
         <div class="slot-label">Discharge</div>
         <div class="photo-slot" id="slotB"></div>
       </div>
@@ -135,7 +135,7 @@ let currentBrandId = null, currentBrandName = null;
 let currentModelId = null, currentModelName = null, currentFg = null;
 let currentLinkId = null;
 let currentSessionId = null;
-let editingPartCode = false;
+let editingSuction = false, editingDischarge = false;
 let brandsCache = [];
 let modelsCache = [];
 let linksCache = [];
@@ -363,8 +363,16 @@ function renderLinkList(){
     const row = document.createElement('div');
     row.className = 'link-item';
     row.onclick = ()=> openLinkDetail(l.id);
-    row.innerHTML = `<div>
-        <div class="part-code">${escapeHtml(l.partCode)}</div>
+    row.innerHTML =
+      `<div>
+        <div style="display:flex;gap:6px;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:11px;color:var(--muted);width:70px;display:inline-block;">Suction</span>
+          <span class="part-code">${escapeHtml(l.suctionPartCode)}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:baseline;margin-bottom:4px;">
+          <span style="font-size:11px;color:var(--muted);width:70px;display:inline-block;">Discharge</span>
+          <span class="part-code">${escapeHtml(l.dischargePartCode)}</span>
+        </div>
         <div class="link-url">${escapeHtml(buildShareUrl(l.id))}</div>
       </div>
       <div class="meta">${l.suctionPhotoUrl || l.dischargePhotoUrl ? 'has photos' : 'no photos yet'}</div>`;
@@ -399,13 +407,15 @@ async function openLinkDetail(id){
     alert('Could not open this link - please reselect the brand and model, then try again.');
     await backToLinksList(); return;
   }
-  currentLinkId = id; editingPartCode = false;
+  currentLinkId = id;
+  editingSuction = false; editingDischarge = false;
   document.getElementById('brandPanel').classList.add('hidden');
   document.getElementById('modelPanel').classList.add('hidden');
   document.getElementById('linksPanel').classList.add('hidden');
   document.getElementById('detailPanel').classList.remove('hidden');
   document.getElementById('linkText').textContent = buildShareUrl(id);
-  renderPartCodeRow(rec);
+  renderPartCodeRow('A', rec);
+  renderPartCodeRow('B', rec);
   renderSlot('A', rec);
   renderSlot('B', rec);
 
@@ -417,47 +427,56 @@ async function openLinkDetail(id){
     document.getElementById('timerBox').textContent = 'Could not start timer: ' + err.message;
   }
 }
-function renderPartCodeRow(rec){
-  const row = document.getElementById('partCodeRow');
+
+/* ---------- per-column part codes (Suction = A, Discharge = B) ---------- */
+function renderPartCodeRow(slot, rec){
+  const row = document.getElementById('partCodeRow' + slot);
+  const isEditing = slot === 'A' ? editingSuction : editingDischarge;
+  const code = slot === 'A' ? rec.suctionPartCode : rec.dischargePartCode;
   closeAnyKebabMenu();
-  if(editingPartCode){
-    row.innerHTML = `<input type="text" class="part-code-edit-input" id="partCodeEditInput" value="${escapeHtml(rec.partCode)}">
-       <button class="ghost-btn" onclick="savePartCode()">Save</button>
-       <button class="ghost-btn" onclick="cancelEditPartCode()">Cancel</button>`;
-    setTimeout(()=>{ const i=document.getElementById('partCodeEditInput'); if(i){ i.focus(); i.select(); } },0);
+  if(isEditing){
+    row.innerHTML =
+      `<input type="text" class="part-code-edit-input" id="partCodeEditInput${slot}" value="${escapeHtml(code)}" style="min-width:140px;">
+       <button class="ghost-btn" onclick="savePartCode('${slot}')">Save</button>
+       <button class="ghost-btn" onclick="cancelEditPartCode('${slot}')">Cancel</button>`;
+    setTimeout(()=>{ const i=document.getElementById('partCodeEditInput'+slot); if(i){ i.focus(); i.select(); } },0);
   } else {
-    row.innerHTML = `<span class="part-code-display">${escapeHtml(rec.partCode)}</span>
-       <button class="kebab-btn static" onclick="togglePartCodeKebab(event)">&#8942;</button>
-       <span class="save-hint" id="saveHint">Saved</span>`;
+    row.innerHTML =
+      `<span class="part-code-display">${escapeHtml(code)}</span>
+       <button class="kebab-btn static" onclick="togglePartCodeKebab(event,'${slot}')">&#8942;</button>
+       <span class="save-hint" id="saveHint${slot}">Saved</span>`;
   }
 }
-function togglePartCodeKebab(ev){
+function togglePartCodeKebab(ev, slot){
   ev.stopPropagation(); closeAnyKebabMenu();
-  const row = document.getElementById('partCodeRow');
+  const row = document.getElementById('partCodeRow' + slot);
   const menu = document.createElement('div');
-  menu.className = 'kebab-menu'; menu.style.top = '36px'; menu.style.right = 'auto'; menu.style.left = '0';
-  menu.innerHTML = '<button onclick="startEditPartCode()">Edit</button><button class="danger" onclick="deleteCurrentLink()">Delete</button>';
+  menu.className = 'kebab-menu';
+  menu.style.top = '30px'; menu.style.left = '50%'; menu.style.transform = 'translateX(-50%)'; menu.style.right = 'auto';
+  menu.innerHTML = `<button onclick="startEditPartCode('${slot}')">Edit</button><button class="danger" onclick="deleteCurrentLink()">Delete link</button>`;
   row.appendChild(menu);
   document.addEventListener('click', closeAnyKebabMenu, { once:true });
 }
-async function startEditPartCode(){
-  closeAnyKebabMenu(); editingPartCode = true;
+async function startEditPartCode(slot){
+  closeAnyKebabMenu();
+  if(slot === 'A') editingSuction = true; else editingDischarge = true;
   const rec = await api('/api/links/' + currentLinkId);
-  renderPartCodeRow(rec);
+  renderPartCodeRow(slot, rec);
 }
-async function cancelEditPartCode(){
-  editingPartCode = false;
+async function cancelEditPartCode(slot){
+  if(slot === 'A') editingSuction = false; else editingDischarge = false;
   const rec = await api('/api/links/' + currentLinkId);
-  renderPartCodeRow(rec);
+  renderPartCodeRow(slot, rec);
 }
-async function savePartCode(){
-  const val = document.getElementById('partCodeEditInput').value.trim();
+async function savePartCode(slot){
+  const val = document.getElementById('partCodeEditInput' + slot).value.trim();
   if(!val) return;
+  const body = slot === 'A' ? { suctionPartCode: val } : { dischargePartCode: val };
   try {
-    const rec = await api('/api/links/' + currentLinkId, { method:'PUT', body: JSON.stringify({ partCode: val }) });
-    editingPartCode = false;
-    renderPartCodeRow(rec);
-    const hint = document.getElementById('saveHint');
+    const rec = await api('/api/links/' + currentLinkId, { method:'PUT', body: JSON.stringify(body) });
+    if(slot === 'A') editingSuction = false; else editingDischarge = false;
+    renderPartCodeRow(slot, rec);
+    const hint = document.getElementById('saveHint' + slot);
     if(hint){ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 1200); }
   } catch(err){ alert(err.message); }
 }
@@ -547,16 +566,16 @@ document.body.addEventListener('dblclick', (e)=>{
   if(row && !e.target.closest('img')) openLightboxBoth();
 });
 
-/* ---- deep link: dashboard.html?link=<id> opens straight to that part code ---- */
+/* ---- deep link: dashboard.html?link=<id> opens straight to that part ---- */
 (async function handleDeepLink(){
   const params = new URLSearchParams(window.location.search);
   const linkId = params.get('link');
   if(!linkId) { await backToBrandSelect(); return; }
   try {
-    const rec = await api('/api/links/' + linkId); // includes brand + model info
+    const rec = await api('/api/links/' + linkId);
     currentBrandId = rec.brand.id; currentBrandName = rec.brand.name;
     currentModelId = rec.model.id; currentModelName = rec.model.modelName; currentFg = rec.model.fgCode;
-    await loadBrands(); // so "back" chains work correctly afterwards
+    await loadBrands();
     await loadModels();
     await loadLinks();
     await openLinkDetail(linkId);
