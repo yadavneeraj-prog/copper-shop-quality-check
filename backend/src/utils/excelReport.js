@@ -26,9 +26,6 @@ async function buildSessionReportExcel(sessions) {
     const durationSec = s.durationSeconds || 0;
     const mm = String(Math.floor(durationSec / 60)).padStart(2, '0');
     const ss = String(Math.floor(durationSec % 60)).padStart(2, '0');
-    const suction = s.partCodeLink?.suctionPartCode || '';
-    const discharge = s.partCodeLink?.dischargePartCode || '';
-    const partCode = [suction, discharge].filter(Boolean).join(' / ');
 
     sheet.addRow({
       sno: i + 1,
@@ -37,7 +34,7 @@ async function buildSessionReportExcel(sessions) {
       brand: s.partCodeLink?.model?.brand?.name || '',
       model: s.partCodeLink?.model?.modelName || '',
       fgCode: s.partCodeLink?.model?.fgCode || '',
-      partCode,
+      partCode: s.partCodeLink?.partCode || '',
       date: new Date(s.startTime).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
       startTime: new Date(s.startTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
       endTime: s.endTime ? new Date(s.endTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) : '(still open)',
