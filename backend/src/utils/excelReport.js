@@ -34,9 +34,9 @@ async function buildSessionReportExcel(sessions) {
       model: s.partCodeLink?.model?.modelName || '',
       fgCode: s.partCodeLink?.model?.fgCode || '',
       partCode: s.partCodeLink?.partCode || '',
-      date: new Date(s.startTime).toLocaleDateString('en-IN'),
-      startTime: new Date(s.startTime).toLocaleTimeString('en-IN'),
-      endTime: s.endTime ? new Date(s.endTime).toLocaleTimeString('en-IN') : '(still open)',
+            date: new Date(s.startTime).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      startTime: new Date(s.startTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      endTime: s.endTime ? new Date(s.endTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) : '(still open)',
       duration: s.endTime ? `${mm}:${ss}` : ''
     });
   });
